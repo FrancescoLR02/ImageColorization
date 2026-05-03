@@ -218,7 +218,7 @@ def train(
                 l_batch,
                 chosen_ab,
                 rejected_ab,
-                pts=pts,
+                pts=pts.to(device),
                 beta=beta,
             )
             loss.backward()
