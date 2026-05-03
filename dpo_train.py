@@ -2,6 +2,7 @@ from typing import Dict, List, Literal
 
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 from tqdm.notebook import tqdm, trange
@@ -13,10 +14,11 @@ from colorization.colorizers import (
     eccv16,
     siggraph17,
 )  # your existing factory function
+from LoRA import LoRAConv2d, inject_lora
 
 # ── 1. Freeze encoder (model1-6), keep decoder trainable ─────────────────────
 
-
+"""
 def build_model(
     model_name: Literal["eccv16", "siggraph17"],
     target_layers: List[str],
@@ -24,7 +26,7 @@ def build_model(
 ) -> ECCVGenerator | SIGGRAPHGenerator:
     if model_name == "eccv16":
         model = eccv16(pretrained=pretrained)
-    if model_name == "siggraph17":
+    elif model_name == "siggraph17":
         model = siggraph17(pretrained=pretrained)
     else:
         raise ValueError("model_name must be one of eccv16 or siggraph17")
@@ -38,6 +40,42 @@ def build_model(
         module = getattr(model, name)  # resolves 'model7' → model.model7
         for param in module.parameters():
             param.requires_grad = True
+
+    n_frozen = sum(p.numel() for p in model.parameters() if not p.requires_grad)
+    n_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Frozen: {n_frozen:,}  |  Trainable: {n_trainable:,}")
+    return model
+"""
+
+
+def build_model(
+    model_name: Literal["eccv16", "siggraph17"],
+    lora_layers: List[str] | None = None,
+    finetune_layers: List[str] | None = None,
+    pretrained: bool = True,
+) -> ECCVGenerator | SIGGRAPHGenerator:
+    if model_name == "eccv16":
+        model = eccv16(pretrained=pretrained)
+    elif model_name == "siggraph17":
+        model = siggraph17(pretrained=pretrained)
+    else:
+        raise ValueError("model_name must be one of eccv16 or siggraph17")
+
+    # Freeze everything first
+    for param in model.parameters():
+        param.requires_grad = False
+
+    # we might want to retrain some layers (e.g. the decoder head)
+    if finetune_layers is not None:
+        for name in finetune_layers:
+            module = getattr(model, name)  # resolves 'model7' → model.model7
+            for param in module.parameters():
+                param.requires_grad = True
+
+    # add the LoRA layers
+    if lora_layers is not None:
+        for name in lora_layers:
+            inject_lora(model, target_name=name)
 
     n_frozen = sum(p.numel() for p in model.parameters() if not p.requires_grad)
     n_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -146,15 +184,10 @@ def train(
     batch_size: int = 8,
     lr: float = 1e-4,
     beta: float = 0.1,
-    lora_config: LoraConfig | None = None,
 ) -> ECCVGenerator:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    if lora_config is None:
-        policy_model = model.to(device).train()
-    else:
-        policy_model = get_peft_model(model.to(device), lora_config)
-    # ref_model    = build_model(pretrained=True).to(device).eval()  # frozen reference
+    policy_model = model.to(device).train()
     for p in ref_model.parameters():
         p.requires_grad = False
 

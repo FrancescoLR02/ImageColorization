@@ -180,7 +180,6 @@ class ECCVGenerator(BaseColor):
         model8 += [
             nn.ReLU(True),
         ]
-
         model8 += [
             nn.Conv2d(256, 313, kernel_size=1, stride=1, padding=0, bias=True),
         ]
