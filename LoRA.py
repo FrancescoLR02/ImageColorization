@@ -85,6 +85,15 @@ def inject_lora(
         else:
             # If it's not a Conv2d (e.g., it's an nn.Sequential),
             # recursively dig into it and check its children.
-            inject_lora(module, r=r, alpha=alpha, target_name=target_name)
+            inject_lora(
+                module,
+                r=r,
+                alpha=alpha,
+                target_name=(
+                    target_name.replace(name + ".", "")
+                    if target_name is not None
+                    else target_name
+                ),
+            )
 
     return model

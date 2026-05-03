@@ -188,6 +188,7 @@ def train(
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     policy_model = model.to(device).train()
+    ref_model = ref_model.to(device)
     for p in ref_model.parameters():
         p.requires_grad = False
 
