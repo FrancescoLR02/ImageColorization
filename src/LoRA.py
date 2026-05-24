@@ -65,35 +65,28 @@ class LoRAConv2d(nn.Module):
 
 
 def inject_lora(
-    model: nn.Module, r: int = 8, alpha: int = 16, target_name: str | None = None
+    model: nn.Module, target_name: str | None = None, r: int = 8, alpha: int = 16
 ) -> nn.Module:
-    """
-    Recursively finds nn.Conv2d layers and wraps them in LoRAConv2d.
-    Handles nested layers like nn.Sequential perfectly.
-    """
-    for name, module in model.named_children():
-        # 1. Check if the module is a Conv2d layer
-        is_conv = isinstance(module, nn.Conv2d)
-
-        # 2. Check if it matches our naming criteria (if we provided one)
-        matches_name = (target_name is None) or (target_name in name)
-
-        if is_conv and matches_name:
-            # Swap the layer
-            lora_layer = LoRAConv2d(module, r=r, alpha=alpha)
-            setattr(model, name, lora_layer)
+    if target_name is not None:
+        target = dict(model.named_modules())[target_name]
+        if isinstance(target, (nn.Conv2d, nn.ConvTranspose2d)):
+            # swap in-place sul parent
+            *parent_path, leaf = target_name.split(".")
+            parent = model
+            for p in parent_path:
+                parent = getattr(parent, p)
+            setattr(parent, leaf, LoRAConv2d(target, r=r, alpha=alpha))
         else:
-            # If it's not a Conv2d (e.g., it's an nn.Sequential),
-            # recursively dig into it and check its children.
-            inject_lora(
-                module,
-                r=r,
-                alpha=alpha,
-                target_name=(
-                    target_name.replace(name + ".", "")
-                    if target_name is not None
-                    else target_name
-                ),
-            )
-
+            # è un container: inietta su tutti i Conv2d al suo interno
+            _inject_recursive(target, r, alpha)
+    else:
+        _inject_recursive(model, r, alpha)
     return model
+
+
+def _inject_recursive(module: nn.Module, r: int, alpha: int):
+    for name, child in module.named_children():
+        if isinstance(child, nn.Conv2d):
+            setattr(module, name, LoRAConv2d(child, r=r, alpha=alpha))
+        else:
+            _inject_recursive(child, r, alpha)
