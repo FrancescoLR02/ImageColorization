@@ -376,7 +376,17 @@ def train(
 
         if saving_epochs is not None:
             if epoch + 1 in saving_epochs:
-                model_saver.save_model(model, epochs=epoch, **kwargs)
+                model_saver.save_model(
+                    model,
+                    epochs=epoch,
+                    lora_layers=lora_layers,
+                    finetune_layers=finetune_layers,
+                    lr=lr,
+                    beta=beta,
+                    train_loss=train_losses[-1],
+                    val_loss=val_losses[-1],
+                    **kwargs,
+                )
 
         plot_losses(list(range(epochs)), val_epochs, train_losses, val_losses)
 
