@@ -98,9 +98,14 @@ def ab_to_soft_target(ab, pts, sigma=0.1):
 
 
 def image_log_likelihood_per_sample_soft(logits, ab_target, pts, sigma=0.1):
+    B, _, H, W = logits.shape
     soft_tgt = ab_to_soft_target(ab_target, pts, sigma)
+    # Downsample target to match logits spatial size (H/4, W/4)
+    soft_ab_down = F.interpolate(
+        soft_tgt, size=(H, W), mode="bilinear", align_corners=False
+    )
     log_probs = F.log_softmax(logits, dim=1)
-    ll_pixel = (soft_tgt * log_probs).sum(dim=1)  # (B, H, W)
+    ll_pixel = (soft_ab_down * log_probs).sum(dim=1)  # (B, H, W)
     return ll_pixel.sum(dim=(1, 2))  # (B,)
 
 
@@ -272,9 +277,11 @@ def train(
         )
 
     train_losses = []
+    train_epochs = []
     val_losses = []
     val_epochs = []
     for epoch in trange(epochs, desc="Epochs"):
+        train_epochs.append(epoch)
         total_loss = 0.0
         batch_bar = tqdm(
             train_loader, desc=f"Epoch {epoch + 1}/{epochs} [train]", leave=False
@@ -385,10 +392,12 @@ def train(
                     beta=beta,
                     train_loss=train_losses[-1],
                     val_loss=val_losses[-1],
+                    r_chosen=r_chosen,
+                    r_rejected=r_rejected,
                     **kwargs,
                 )
 
-        plot_losses(list(range(epochs)), val_epochs, train_losses, val_losses)
+    plot_losses(train_epochs, val_epochs, train_losses, val_losses)
 
     return policy_model
 

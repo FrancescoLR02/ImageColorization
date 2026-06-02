@@ -19,6 +19,9 @@ class ModelSaver:
     def save_model(self, model: nn.Module, **kwargs) -> None:
         model_name = uuid.uuid4().__str__()
         torch.save(model.state_dict(), self.state_dicts_path / f"{model_name}.pth")
+        with open(self.index_path, "r") as index_file:
+            data = json.load(index_file)
+        data.append({"model_name": model_name, **kwargs})
         with open(self.index_path, "w") as index_file:
-            json.dump({"model_name": model_name, **kwargs}, index_file)
+            json.dump(data, index_file)
         return
